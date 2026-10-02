@@ -234,3 +234,47 @@ Kiểm tra script bằng SDK giả lập:
 ```bash
 uv run pytest tests/test_generate_sql.py
 ```
+
+## Chuẩn bị tập BIRD Mini-Dev 120 câu
+
+Nguồn đã dùng: [BIRD Mini-Dev SQLite 500 câu](https://huggingface.co/datasets/birdsql/bird_mini_dev/tree/f65faf4ae3b638c1fa6df1d3370c8d92c8366301/data),
+revision `f65faf4ae3b638c1fa6df1d3370c8d92c8366301`. Lưu file JSON vào
+`data/bird_source/mini_dev_sqlite.json`, sau đó chạy từ thư mục `back-end`:
+
+```powershell
+uv run python -m scripts.prepare_bird --source data\bird_source\mini_dev_sqlite.json --output-dir data\bird_split --source-version f65faf4ae3b638c1fa6df1d3370c8d92c8366301 --seed 11
+```
+
+Chương trình kiểm tra `question_id`, `db_id`, `question`, `evidence`, `SQL`,
+`difficulty`, đúng 500 câu và 11 database. Mỗi mức độ được lấy xoay vòng theo
+database, với 36 `simple`, 60 `moderate`, 24 `challenging`. Cùng file nguồn và
+seed sẽ tạo lại cùng danh sách ID, kể cả khi thứ tự các dòng nguồn thay đổi.
+
+Kết quả trong `data/bird_split/` (thư mục `data/` không đưa lên Git):
+
+- `test_en.json`: 120 câu kiểm tra, **không chứa SQL chuẩn**; dùng làm input sinh SQL.
+- `gold_120.json`: SQL chuẩn của đúng 120 ID; chỉ bộ chấm điểm được đọc file này.
+- `examples_380.json`: 380 câu còn lại kèm SQL, dành cho chiến lược few-shot.
+- `manifest.json`: seed, phiên bản và SHA-256 nguồn, ID được chọn, phân bố độ khó
+  và database để kiểm tra/tái lập việc lấy mẫu.
+
+Chương trình không ghi đè bốn file đầu ra đã có. Bước này chưa dịch 120 câu sang
+tiếng Việt, chưa xác minh SQL chuẩn bằng SQLite và chưa chạy mô hình/chấm EX.
+
+## Kiểm tra SQL chuẩn trên BIRD SQLite
+
+Đặt 11 file SQLite của cùng bản BIRD Mini-Dev vào
+`data/bird_databases/<db_id>/<db_id>.sqlite` (hoặc
+`data/bird_databases/<db_id>.sqlite`). Ví dụ:
+`data/bird_databases/california_schools/california_schools.sqlite`.
+Các file database chưa nằm trong repo. Sau khi có đủ 11 file, chạy từ `back-end`:
+
+```powershell
+uv run python -m scripts.check_bird_gold --db-root data\bird_databases
+```
+
+Lệnh chạy toàn bộ SQL trong `gold_120.json` chỉ để xác minh SQL thực thi được;
+không dùng file gold làm prompt. Mỗi truy vấn mở SQLite chỉ đọc, giới hạn 5 giây
+và 100.000 dòng; lệnh báo ID và lỗi của các câu không chạy được, trả exit code 1
+khi còn lỗi. Đây chưa phải chấm EX giữa SQL sinh ra và SQL chuẩn. Để chạy test
+độc lập với dữ liệu BIRD thật: `uv run pytest tests/test_bird_sqlite.py`.

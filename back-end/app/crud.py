@@ -1,11 +1,41 @@
-import fcntl
 import json
 import os
 import tempfile
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
+
 STORE_PATH = Path(__file__).resolve().parents[1] / "data" / "threads.json"
+
+
+@contextmanager
+def _file_lock(path: Path):
+    """Lock a file across server workers on both POSIX and Windows."""
+    with path.open("a+b") as lock:
+        if os.name == "nt":
+            # msvcrt locks one byte starting at the current file position.
+            lock.seek(0, os.SEEK_END)
+            if lock.tell() == 0:
+                lock.write(b"\0")
+                lock.flush()
+            lock.seek(0)
+            msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+            try:
+                yield
+            finally:
+                lock.seek(0)
+                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 def _read(path: Path) -> list[dict[str, str | None]]:
@@ -34,8 +64,7 @@ def save_thread(thread_id: str, name: str | None = None) -> None:
     path = STORE_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     # File lock also coordinates separate server workers on this machine.
-    with path.with_suffix(".lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    with _file_lock(path.with_suffix(".lock")):
         records = _read(path)
         if any(record["thread_id"] == thread_id for record in records):
             return
@@ -69,7 +98,6 @@ def _write(path: Path, records: list[dict[str, str | None]]) -> None:
 def delete_thread(thread_id: str) -> None:
     path = STORE_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.with_suffix(".lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    with _file_lock(path.with_suffix(".lock")):
         records = _read(path)
         _write(path, [record for record in records if record["thread_id"] != thread_id])
