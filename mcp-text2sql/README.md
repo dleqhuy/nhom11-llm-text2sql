@@ -4,6 +4,41 @@ MCP server cho PostgreSQL, viết bằng Python + SQLAlchemy. Server cung cấp
 hai tool `search_objects` và `execute_sql` qua Streamable HTTP tại
 `http://127.0.0.1:7000/mcp`.
 
+## Kiến trúc
+
+MCP là adapter dữ liệu cho Codex, không phải API chat và không giữ trạng thái
+thread. Codex là MCP client; backend cung cấp URL MCP khi khởi tạo Codex.
+
+```text
+Frontend ──> FastAPI ──> Codex MCP client
+                           │ Streamable HTTP :7000/mcp
+                           ▼
+                      server.py (FastMCP tools)
+                       ├─ search_objects.py ──> PostgreSQL catalogs
+                       └─ execute_sql.py ──> sql_policy.py ──> SQLAlchemy Engine
+                                                               └─ PostgreSQL
+```
+
+### Thành phần
+
+- `server.py` nạp `.env`, tạo FastMCP Streamable HTTP server và SQLAlchemy engine,
+  đăng ký tool, chuẩn hóa kết quả thành MCP text content JSON. Đây là entrypoint
+  chạy bằng `uv run python server.py`.
+- `mcp_text2sql/db.py` tạo engine/kết nối PostgreSQL dùng chung cho các tool.
+- `mcp_text2sql/search_objects.py` truy vấn catalog PostgreSQL để khám phá schema,
+  tables/views, columns, routines và indexes; có giới hạn kết quả và cấp độ chi tiết.
+- `mcp_text2sql/execute_sql.py` chạy các statement và định dạng result set theo
+  từng statement, cắt số dòng ở `MAX_ROWS`.
+- `mcp_text2sql/sql_policy.py` kiểm tra chính sách SQL trước khi chạy. Khi
+  `READONLY=true`, từ chối lệnh ghi và thực thi trong transaction chỉ đọc.
+- `pyproject.toml` khai báo MCP SDK, SQLAlchemy, psycopg và sqlparse; `.env` cấu hình
+  kết nối và giới hạn runtime, không commit credential.
+
+Luồng truy vấn do Codex quyết định: thường gọi `search_objects` trước để tìm schema,
+sau đó mới gọi `execute_sql`. Server MCP trả dữ liệu có cấu trúc và trạng thái lỗi;
+Codex diễn giải kết quả thành câu trả lời cho người dùng. Nếu thay đổi tên tool hoặc
+schema tham số, cần đồng bộ cấu hình `enabled_tools` ở backend và hướng dẫn tool cho Codex.
+
 ## Chạy
 
 Cần Python 3.11 trở lên, `uv` và PostgreSQL có thể kết nối.

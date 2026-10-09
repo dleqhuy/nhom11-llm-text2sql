@@ -2,6 +2,43 @@
 
 Backend tối giản, dùng `uv` quản lý Python và dependencies.
 
+## Kiến trúc và ranh giới module
+
+Backend là lớp HTTP/orchestration giữa SPA và Codex. Backend không thực thi SQL
+trực tiếp: trong lifespan, nó cấu hình Codex dùng MCP server `text2sql`; Codex
+quyết định lúc nào cần khám phá schema hoặc chạy truy vấn.
+
+```text
+Frontend (REST + EventSource)
+  └─ FastAPI app / CORS / lifespan
+      ├─ api/routes: threads, turns, events, health
+      ├─ services: Codex orchestration, runtime, SSE event buffer
+      ├─ crud.py: registry thread JSON trên đĩa
+      └─ AsyncCodex ──> MCP Streamable HTTP ──> PostgreSQL (read-only)
+```
+
+### Các lớp và vòng đời request
+
+- `app/main.py` tạo FastAPI, CORS middleware, lifespan và gắn API router.
+- `app/core/config.py` đọc cấu hình từ environment/`.env`; `lifespan.py` tạo một
+  `AsyncCodex` và `Runtime` cho mỗi process, cấu hình MCP URL/tools, rồi đóng các
+  turn đang quản lý và client khi server dừng.
+- `app/api/routes/` là adapter HTTP: `threads.py` quản lý thread/lịch sử,
+  `turns.py` tạo turn/steer/interrupt, `events.py` stream event và `utils.py`
+  cung cấp health check. `deps.py` lấy runtime/Codex từ `app.state`.
+- `app/services/` giữ logic nghiệp vụ độc lập với route: `thread_creation.py`
+  tạo thread và đặt tên; `threads.py` resume/list/delete thread; `turns.py`
+  điều khiển turn; `runtime.py` theo dõi turn đang chạy; `events.py` lưu và phát
+  SSE có cursor; `errors.py` ánh xạ lỗi SDK sang lỗi API.
+- `app/models.py` định nghĩa schema Pydantic cho request/response; `crud.py`
+  đọc/ghi registry thread JSON, không lưu nội dung hội thoại (nội dung thuộc Codex).
+- `tests/` kiểm tra API và lifecycle bằng SDK giả lập; `scripts/` chứa tiện ích
+  format/lint và batch sinh SQL.
+
+Route nên chỉ xác thực input, gọi service và trả response. Logic Codex/runtime
+nên nằm trong `services/`; schema HTTP nên nằm trong `models.py`. Với cấu hình hiện tại,
+chạy một Uvicorn worker vì handle runtime và event buffer ở trong bộ nhớ process.
+
 ## Cấu trúc
 
 Tổ chức theo [Full Stack FastAPI Template](https://github.com/fastapi/full-stack-fastapi-template/tree/master/backend),
