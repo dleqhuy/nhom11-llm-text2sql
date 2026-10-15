@@ -271,3 +271,18 @@ Kiểm tra script bằng SDK giả lập:
 ```bash
 uv run pytest tests/test_generate_sql.py
 ```
+
+## Benchmark full BIRD Mini-Dev: CM, EM, EX, VES
+
+Bộ chạy **gpt-6-astra / BIRD Mini-Dev PostgreSQL / 500 câu** và từng độ đo
+được tách riêng trong [evaluation/README.md](evaluation/README.md).
+
+```bash
+uv sync --group evaluation
+uv run --group evaluation python -m evaluation.run all \
+  --output results/gpt-6-astra-mini-dev-pg --model gpt-6-astra
+```
+
+Lệnh `all` kiểm tra SQL chuẩn, sinh SQL có checkpoint, rồi chấm và xuất báo cáo.
+Cần MCP đang chạy và PostgreSQL chứa dữ liệu tương ứng. CM/EM dùng giao thức
+`postgres-ast-v1`, không phải điểm Spider chính thức; xem giới hạn trong hướng dẫn.
