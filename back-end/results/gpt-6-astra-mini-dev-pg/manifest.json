@@ -1,0 +1,25 @@
+{
+  "model": "gpt-6-astra",
+  "reasoning_effort": "low",
+  "dataset": "birdsql/bird_mini_dev PostgreSQL",
+  "dataset_sha256": "7fa740ef9225389cff6c34432120e8325d0ca3008d73db1ae38731234bc10da7",
+  "questions": 500,
+  "database_counts": {
+    "debit_card_specializing": 30,
+    "student_club": 48,
+    "thrombosis_prediction": 50,
+    "european_football_2": 51,
+    "formula_1": 66,
+    "superhero": 52,
+    "codebase_community": 49,
+    "card_games": 52,
+    "toxicology": 40,
+    "california_schools": 30,
+    "financial": 32
+  },
+  "deployment": "11 domains combined in BIRD.public",
+  "mcp_url": "http://127.0.0.1:7000/mcp",
+  "protocol": "postgres-ast-v1",
+  "generation_concurrency": 4,
+  "started_at": "2026-10-15T04:08:51.956267+00:00"
+}
